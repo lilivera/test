@@ -10,7 +10,7 @@ namespace SplatoonScriptsOfficial.Duties.Dawntrail.Dancing_Mad
 {
     public class P4_Debuff_Reminder_JP_Fixed : SplatoonScript
     {
-        public override Metadata Metadata { get; } = new Metadata(7, "NightmareXIV / JP fixed / legacy syntax");
+        public override Metadata Metadata { get; } = new Metadata(8, "NightmareXIV / JP fixed / legacy syntax");
         public override HashSet<uint> ValidTerritories { get; } = new HashSet<uint> { 1363 };
 
         private readonly List<string> VfxLie = new List<string>
@@ -43,7 +43,8 @@ namespace SplatoonScriptsOfficial.Duties.Dawntrail.Dancing_Mad
 
             public override bool Equals(object obj)
             {
-                return obj is StatusInfo && Equals((StatusInfo)obj);
+                if (!(obj is StatusInfo)) return false;
+                return Equals((StatusInfo)obj);
             }
 
             public override int GetHashCode()
@@ -113,15 +114,15 @@ namespace SplatoonScriptsOfficial.Duties.Dawntrail.Dancing_Mad
 
         public override void OnSetup()
         {
-            Controller.RegisterElementFromCode("Black", @"{""Name"":"""",""type"":3,""refY"":40.0,""radius"":12,""fillIntensity"":0.6,""refActorNPCNameID"":6055,""refActorRequireCast"":true,""refActorCastId"":[50069],""refActorComparisonType"":6,""includeRotation"":true}");
-            Controller.RegisterElementFromCode("White", @"{""Name"":"""",""type"":3,""refY"":40.0,""radius"":12,""fillIntensity"":0.6,""refActorNPCNameID"":6055,""refActorRequireCast"":true,""refActorCastId"":[50068],""refActorComparisonType"":6,""includeRotation"":true}");
+            Controller.RegisterElementFromCode("Black", "{\"Name\":\"\",\"type\":3,\"refY\":40.0,\"radius\":12,\"fillIntensity\":0.6,\"refActorNPCNameID\":6055,\"refActorRequireCast\":true,\"refActorCastId\":[50069],\"refActorComparisonType\":6,\"includeRotation\":true}");
+            Controller.RegisterElementFromCode("White", "{\"Name\":\"\",\"type\":3,\"refY\":40.0,\"radius\":12,\"fillIntensity\":0.6,\"refActorNPCNameID\":6055,\"refActorRequireCast\":true,\"refActorCastId\":[50068],\"refActorComparisonType\":6,\"includeRotation\":true}");
 
             Controller.RegisterElementsFromMultilineCode(string.Join("\n", new string[]
             {
-                @"{""Name"":""LookAway"",""type"":1,""radius"":0.0,""fillIntensity"":0.5,""overlayBGColor"":2550136832,""overlayTextColor"":4278190335,""thicc"":3.0,""overlayText"":""見ない"",""refActorName"":""*"",""refActorRequireBuff"":true,""refActorBuffId"":[5543,452],""refActorUseBuffTime"":true,""refActorBuffTimeMax"":15.0,""tether"":true}",
-                @"{""Name"":""LookAt"",""type"":1,""radius"":0.0,""color"":3355508521,""fillIntensity"":0.5,""overlayBGColor"":2550136832,""overlayTextColor"":4278255376,""thicc"":3.0,""overlayText"":""見る"",""refActorName"":""*"",""refActorRequireBuff"":true,""refActorBuffId"":[5543,452],""refActorUseBuffTime"":true,""refActorBuffTimeMax"":15.0,""tether"":true}",
-                @"{""Name"":""EyeScope"",""type"":4,""radius"":15.0,""coneAngleMin"":-45,""coneAngleMax"":45,""color"":3355506687,""fillIntensity"":0.125,""thicc"":3.0,""refActorType"":1,""includeRotation"":true,""FillStep"":99.0,""RenderEngineKind"":2}",
-                @"{""Name"":""Hint"",""type"":1,""radius"":0.0,""Filled"":false,""fillIntensity"":0.5,""overlayTextColor"":4292739327,""overlayVOffset"":5.0,""thicc"":0.0,""overlayText"":"""",""refActorType"":1}"
+                "{\"Name\":\"LookAway\",\"type\":1,\"radius\":0.0,\"fillIntensity\":0.5,\"overlayBGColor\":2550136832,\"overlayTextColor\":4278190335,\"thicc\":3.0,\"overlayText\":\"見ない\",\"refActorName\":\"*\",\"refActorRequireBuff\":true,\"refActorBuffId\":[5543,452],\"refActorUseBuffTime\":true,\"refActorBuffTimeMax\":15.0,\"tether\":true}",
+                "{\"Name\":\"LookAt\",\"type\":1,\"radius\":0.0,\"color\":3355508521,\"fillIntensity\":0.5,\"overlayBGColor\":2550136832,\"overlayTextColor\":4278255376,\"thicc\":3.0,\"overlayText\":\"見る\",\"refActorName\":\"*\",\"refActorRequireBuff\":true,\"refActorBuffId\":[5543,452],\"refActorUseBuffTime\":true,\"refActorBuffTimeMax\":15.0,\"tether\":true}",
+                "{\"Name\":\"EyeScope\",\"type\":4,\"radius\":15.0,\"coneAngleMin\":-45,\"coneAngleMax\":45,\"color\":3355506687,\"fillIntensity\":0.125,\"thicc\":3.0,\"refActorType\":1,\"includeRotation\":true,\"FillStep\":99.0,\"RenderEngineKind\":2}",
+                "{\"Name\":\"Hint\",\"type\":1,\"radius\":0.0,\"Filled\":false,\"fillIntensity\":0.5,\"overlayTextColor\":4292739327,\"overlayVOffset\":5.0,\"thicc\":0.0,\"overlayText\":\"\",\"refActorType\":1}"
             }));
         }
 
