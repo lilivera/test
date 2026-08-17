@@ -1,0 +1,188 @@
+Imports System.IO
+Imports System.IO.Compression
+Imports System.Text
+Imports System.Xml
+
+Module Program
+
+    Sub Main(args As String())
+
+        If args.Length < 1 Then
+            Console.WriteLine("使用方法:")
+            Console.WriteLine("ExcelRepair.exe C:\work\test.xlsx")
+            Environment.Exit(1)
+        End If
+
+        Dim inputPath As String = Path.GetFullPath(args(0))
+
+        If Not File.Exists(inputPath) Then
+            Console.WriteLine("ファイルが存在しません。")
+            Environment.Exit(1)
+        End If
+
+        Dim ext As String = Path.GetExtension(inputPath).ToLower()
+
+        If ext <> ".xlsx" AndAlso
+           ext <> ".xlsm" AndAlso
+           ext <> ".xltx" AndAlso
+           ext <> ".xltm" Then
+
+            Console.WriteLine("対象外のファイル形式です。")
+            Environment.Exit(1)
+
+        End If
+
+        Dim dir As String = Path.GetDirectoryName(inputPath)
+        Dim name As String = Path.GetFileNameWithoutExtension(inputPath)
+
+        Dim outputPath As String =
+            Path.Combine(dir, name & "_Excel2016" & ext)
+
+        File.Copy(inputPath, outputPath, True)
+
+        Try
+
+            Using zip As ZipArchive =
+                ZipFile.Open(outputPath, ZipArchiveMode.Update)
+
+                ' sheet2.xmlを修復
+                RepairWorksheet(zip, "xl/worksheets/sheet2.xml")
+
+            End Using
+
+            Console.WriteLine("修復完了")
+            Console.WriteLine(outputPath)
+
+        Catch ex As Exception
+
+            Console.WriteLine("修復失敗")
+            Console.WriteLine(ex.Message)
+
+            If File.Exists(outputPath) Then
+                File.Delete(outputPath)
+            End If
+
+            Environment.Exit(1)
+
+        End Try
+
+    End Sub
+
+
+    Private Sub RepairWorksheet(
+        zip As ZipArchive,
+        sheetPath As String
+    )
+
+        Dim entry As ZipArchiveEntry = zip.GetEntry(sheetPath)
+
+        If entry Is Nothing Then
+            Throw New Exception(
+                sheetPath & " が存在しません。"
+            )
+        End If
+
+        Dim xmlText As String
+
+        Using stream As Stream = entry.Open()
+            Using reader As New StreamReader(
+                stream,
+                Encoding.UTF8,
+                True
+            )
+                xmlText = reader.ReadToEnd()
+            End Using
+        End Using
+
+        Dim doc As New XmlDocument()
+
+        doc.PreserveWhitespace = True
+        doc.LoadXml(xmlText)
+
+        Dim sheetPr As XmlNode =
+            doc.SelectSingleNode(
+                "/*[local-name()='worksheet']/" &
+                "*[local-name()='sheetPr']"
+            )
+
+        If sheetPr Is Nothing Then
+            Console.WriteLine(
+                "sheetPrが存在しません。"
+            )
+            Return
+        End If
+
+        '
+        ' codeNameだけ保存
+        '
+        Dim codeName As String = Nothing
+
+        If sheetPr.Attributes IsNot Nothing Then
+
+            Dim attr As XmlAttribute =
+                sheetPr.Attributes("codeName")
+
+            If attr IsNot Nothing Then
+                codeName = attr.Value
+            End If
+
+        End If
+
+        '
+        ' sheetPrの内容・属性を全部削除
+        '
+        sheetPr.RemoveAll()
+
+        '
+        ' codeNameだけ戻す
+        '
+        If Not String.IsNullOrEmpty(codeName) Then
+
+            Dim attr As XmlAttribute =
+                doc.CreateAttribute("codeName")
+
+            attr.Value = codeName
+
+            sheetPr.Attributes.Append(attr)
+
+        End If
+
+        '
+        ' ZIP内の元エントリを削除
+        '
+        entry.Delete()
+
+        '
+        ' 新しいsheet2.xmlを作成
+        '
+        Dim newEntry As ZipArchiveEntry =
+            zip.CreateEntry(
+                sheetPath,
+                CompressionLevel.Optimal
+            )
+
+        Using stream As Stream = newEntry.Open()
+
+            Dim settings As New XmlWriterSettings()
+
+            settings.Encoding =
+                New UTF8Encoding(False)
+
+            settings.Indent = False
+
+            Using writer As XmlWriter =
+                XmlWriter.Create(stream, settings)
+
+                doc.Save(writer)
+
+            End Using
+
+        End Using
+
+        Console.WriteLine(
+            "修復: " & sheetPath
+        )
+
+    End Sub
+
+End Module
