@@ -1,0 +1,271 @@
+Imports System.IO
+Imports System.IO.Compression
+Imports System.Text
+Imports System.Xml
+
+Module Program
+
+    Sub Main(args As String())
+
+        If args.Length < 2 Then
+            Console.WriteLine("使用方法")
+            Console.WriteLine("ExcelCompare.exe 元.xlsx 修復後.xlsx")
+            Return
+        End If
+
+        CompareSheet(args(0), args(1), "xl/worksheets/sheet2.xml")
+
+        Console.WriteLine()
+        Console.WriteLine("Enterで終了")
+        Console.ReadLine()
+
+    End Sub
+
+
+    Private Sub CompareSheet(
+        originalFile As String,
+        repairedFile As String,
+        sheetPath As String
+    )
+
+        Dim original As XmlDocument =
+            LoadXmlFromExcel(originalFile, sheetPath)
+
+        Dim repaired As XmlDocument =
+            LoadXmlFromExcel(repairedFile, sheetPath)
+
+        Console.WriteLine("=== Worksheet Root ===")
+
+        CompareAttributes(
+            original.DocumentElement,
+            repaired.DocumentElement
+        )
+
+        Console.WriteLine()
+
+        Dim targets() As String = {
+            "sheetPr",
+            "dimension",
+            "sheetViews",
+            "sheetFormatPr",
+            "sheetCalcPr",
+            "sheetProtection",
+            "printOptions",
+            "pageMargins",
+            "pageSetup",
+            "headerFooter",
+            "rowBreaks",
+            "colBreaks",
+            "extLst"
+        }
+
+        For Each name As String In targets
+
+            CompareElement(
+                original,
+                repaired,
+                name
+            )
+
+        Next
+
+    End Sub
+
+
+    Private Function LoadXmlFromExcel(
+        filePath As String,
+        entryPath As String
+    ) As XmlDocument
+
+        Using zip As ZipArchive =
+            ZipFile.OpenRead(filePath)
+
+            Dim entry As ZipArchiveEntry =
+                zip.GetEntry(entryPath)
+
+            If entry Is Nothing Then
+                Throw New Exception(
+                    entryPath & " がありません"
+                )
+            End If
+
+            Using stream As Stream = entry.Open()
+
+                Dim doc As New XmlDocument()
+                doc.PreserveWhitespace = False
+                doc.Load(stream)
+
+                Return doc
+
+            End Using
+
+        End Using
+
+    End Function
+
+
+    Private Sub CompareElement(
+        original As XmlDocument,
+        repaired As XmlDocument,
+        elementName As String
+    )
+
+        Dim xpath As String =
+            "/*[local-name()='worksheet']/" &
+            "*[local-name()='" &
+            elementName &
+            "']"
+
+        Dim beforeNode As XmlNode =
+            original.SelectSingleNode(xpath)
+
+        Dim afterNode As XmlNode =
+            repaired.SelectSingleNode(xpath)
+
+        If beforeNode Is Nothing AndAlso
+           afterNode Is Nothing Then
+
+            Return
+
+        End If
+
+        Console.WriteLine(
+            "=== " & elementName & " ==="
+        )
+
+        If beforeNode Is Nothing Then
+
+            Console.WriteLine(
+                "元      : なし"
+            )
+
+            Console.WriteLine(
+                "修復後  : あり"
+            )
+
+            Console.WriteLine(
+                SafeXml(afterNode)
+            )
+
+            Console.WriteLine()
+
+            Return
+
+        End If
+
+        If afterNode Is Nothing Then
+
+            Console.WriteLine(
+                "★ 修復時に削除されています"
+            )
+
+            Console.WriteLine()
+
+            Console.WriteLine(
+                "元:"
+            )
+
+            Console.WriteLine(
+                SafeXml(beforeNode)
+            )
+
+            Console.WriteLine()
+
+            Return
+
+        End If
+
+        Dim beforeXml As String =
+            SafeXml(beforeNode)
+
+        Dim afterXml As String =
+            SafeXml(afterNode)
+
+        If beforeXml <> afterXml Then
+
+            Console.WriteLine(
+                "★ 内容が変更されています"
+            )
+
+            Console.WriteLine()
+
+            Console.WriteLine("元:")
+            Console.WriteLine(beforeXml)
+
+            Console.WriteLine()
+
+            Console.WriteLine("修復後:")
+            Console.WriteLine(afterXml)
+
+            Console.WriteLine()
+
+        Else
+
+            Console.WriteLine("変更なし")
+            Console.WriteLine()
+
+        End If
+
+    End Sub
+
+
+    Private Sub CompareAttributes(
+        beforeNode As XmlNode,
+        afterNode As XmlNode
+    )
+
+        Console.WriteLine("元:")
+
+        DumpAttributes(beforeNode)
+
+        Console.WriteLine()
+
+        Console.WriteLine("修復後:")
+
+        DumpAttributes(afterNode)
+
+    End Sub
+
+
+    Private Sub DumpAttributes(
+        node As XmlNode
+    )
+
+        If node Is Nothing OrElse
+           node.Attributes Is Nothing Then
+            Return
+        End If
+
+        For Each attr As XmlAttribute In node.Attributes
+
+            Console.WriteLine(
+                attr.Name &
+                "=" &
+                attr.Value
+            )
+
+        Next
+
+    End Sub
+
+
+    Private Function SafeXml(
+        node As XmlNode
+    ) As String
+
+        If node Is Nothing Then
+            Return "(なし)"
+        End If
+
+        '
+        ' sheetDataは絶対に出さない
+        '
+        If node.LocalName = "sheetData" Then
+            Return "(sheetData省略)"
+        End If
+
+        Return node.OuterXml
+
+    End Function
+
+End Module
