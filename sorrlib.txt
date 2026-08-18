@@ -1,84 +1,166 @@
 Option Explicit
 
+'==================================================
+' Windows API
+'==================================================
+
+Private Declare Function AttachConsole Lib "kernel32" _
+    (ByVal dwProcessId As Long) As Long
+
+Private Declare Function GetStdHandle Lib "kernel32" _
+    (ByVal nStdHandle As Long) As Long
+
+Private Declare Function WriteConsoleW Lib "kernel32" _
+    (ByVal hConsoleOutput As Long, _
+     ByVal lpBuffer As Long, _
+     ByVal nNumberOfCharsToWrite As Long, _
+     lpNumberOfCharsWritten As Long, _
+     ByVal lpReserved As Long) As Long
+
+Private Declare Sub ExitProcess Lib "kernel32" _
+    (ByVal uExitCode As Long)
+
+Private Const ATTACH_PARENT_PROCESS As Long = -1
+Private Const STD_OUTPUT_HANDLE As Long = -11
+
+
+'==================================================
+' メイン処理
+'==================================================
+
 Public Sub Main()
 
     Dim filePath As String
+
     Dim lines() As String
     Dim keys() As String
-    Dim lineText As String
     Dim cols() As String
+
+    Dim lineText As String
 
     Dim f As Integer
     Dim count As Long
     Dim capacity As Long
+    Dim i As Long
 
-    '-----------------------------------------
-    ' 引数取得
-    ' 例:
-    '   CsvSort.exe "C:\work\data.csv"
-    '-----------------------------------------
-    filePath = Trim$(Command$)
-
-    ' 前後のダブルクォートを除去
-    If Len(filePath) >= 2 Then
-        If Left$(filePath, 1) = """" And Right$(filePath, 1) = """" Then
-            filePath = Mid$(filePath, 2, Len(filePath) - 2)
-        End If
-    End If
-
-    If Len(filePath) = 0 Then
-        MsgBox "入力ファイルを指定してください。", vbExclamation
-        Exit Sub
-    End If
-
-    If Dir$(filePath) = "" Then
-        MsgBox "ファイルが存在しません。" & vbCrLf & filePath, vbExclamation
-        Exit Sub
-    End If
+    '----------------------------------------------
+    ' 親コンソールへ接続
+    '----------------------------------------------
+    Call AttachConsole(ATTACH_PARENT_PROCESS)
 
     On Error GoTo ErrHandler
 
-    '-----------------------------------------
-    ' CSV読込
-    '-----------------------------------------
+    '----------------------------------------------
+    ' 引数取得
+    '----------------------------------------------
+    filePath = Trim$(Command$)
+
+    ' "C:\work\data.csv" のように
+    ' ダブルクォートで囲まれている場合
+    If Len(filePath) >= 2 Then
+
+        If Left$(filePath, 1) = """" And _
+           Right$(filePath, 1) = """" Then
+
+            filePath = Mid$(filePath, 2, Len(filePath) - 2)
+
+        End If
+
+    End If
+
+    '----------------------------------------------
+    ' 引数チェック
+    '----------------------------------------------
+    If Len(filePath) = 0 Then
+
+        ConsoleEcho "ERROR: 入力ファイルが指定されていません。"
+
+        ExitProcess 1
+
+    End If
+
+    '----------------------------------------------
+    ' ファイル存在チェック
+    '----------------------------------------------
+    If Dir$(filePath) = "" Then
+
+        ConsoleEcho "ERROR: 入力ファイルが存在しません。"
+        ConsoleEcho "FILE : " & filePath
+
+        ExitProcess 2
+
+    End If
+
+    '----------------------------------------------
+    ' 初期領域確保
+    '----------------------------------------------
     capacity = 1000
+
     ReDim lines(0 To capacity - 1)
     ReDim keys(0 To capacity - 1)
 
-    f = FreeFile
-    Open filePath For Input As #f
-
     count = 0
+
+    '----------------------------------------------
+    ' CSV読込
+    '----------------------------------------------
+    f = FreeFile
+
+    Open filePath For Input As #f
 
     Do Until EOF(f)
 
         Line Input #f, lineText
 
-        ' 空行も一応そのまま扱う
+        '------------------------------------------
+        ' カンマで分割
+        ' 囲い文字なし前提
+        '------------------------------------------
         cols = Split(lineText, ",")
 
-        ' 30項目あることを確認
+        '------------------------------------------
+        ' 30項目チェック
+        ' 0 ～ 29 なので UBound = 29
+        '------------------------------------------
         If UBound(cols) <> 29 Then
+
             Close #f
-            MsgBox _
-                "CSVの項目数が30項目ではありません。" & vbCrLf & _
-                "行番号：" & CStr(count + 1) & vbCrLf & _
-                "項目数：" & CStr(UBound(cols) + 1), _
-                vbCritical
-            Exit Sub
+
+            ConsoleEcho _
+                "ERROR: CSV項目数不正。" & _
+                " 行=" & CStr(count + 1) & _
+                " 項目数=" & CStr(UBound(cols) + 1)
+
+            ExitProcess 3
+
         End If
 
+        '------------------------------------------
+        ' 配列拡張
+        '------------------------------------------
         If count >= capacity Then
+
             capacity = capacity + 1000
+
             ReDim Preserve lines(0 To capacity - 1)
             ReDim Preserve keys(0 To capacity - 1)
+
         End If
 
-        ' 元の行はそのまま保持
+        '------------------------------------------
+        ' 元レコードをそのまま保存
+        '------------------------------------------
         lines(count) = lineText
 
-        ' 3項目目をソートキーとして保持
-        ' 配列は0開始なので「2」
+        '------------------------------------------
+        ' 3項目目をソートキーとして保存
+        '
+        ' CSV 3項目目
+        ' → 配列では cols(2)
+        '
+        ' 7桁0埋めなので文字列ソートで
+        ' 数値順と一致する
+        '------------------------------------------
         keys(count) = cols(2)
 
         count = count + 1
@@ -87,49 +169,93 @@ Public Sub Main()
 
     Close #f
 
+    '----------------------------------------------
+    ' 0件ファイル
+    '----------------------------------------------
     If count = 0 Then
-        Exit Sub
+
+        ConsoleEcho "正常終了: 対象データ 0件"
+
+        ExitProcess 0
+
     End If
 
+    '----------------------------------------------
+    ' 実件数へ配列縮小
+    '----------------------------------------------
     ReDim Preserve lines(0 To count - 1)
     ReDim Preserve keys(0 To count - 1)
 
-    '-----------------------------------------
-    ' 3項目目で昇順ソート
-    '-----------------------------------------
+    '----------------------------------------------
+    ' 昇順ソート
+    '----------------------------------------------
     If count > 1 Then
-        QuickSort lines, keys, 0, count - 1
+
+        QuickSort _
+            lines, _
+            keys, _
+            0, _
+            count - 1
+
     End If
 
-    '-----------------------------------------
+    '----------------------------------------------
     ' 元ファイルへ上書き
-    '-----------------------------------------
+    '----------------------------------------------
     f = FreeFile
+
     Open filePath For Output As #f
 
-    Dim i As Long
-
     For i = 0 To count - 1
+
         Print #f, lines(i)
-    Next
+
+    Next i
 
     Close #f
+
+    '----------------------------------------------
+    ' 正常終了
+    '----------------------------------------------
+    ConsoleEcho _
+        "正常終了: " & _
+        CStr(count) & _
+        "件をソートしました。"
+
+    ExitProcess 0
 
     Exit Sub
 
+
+'==================================================
+' エラー処理
+'==================================================
 ErrHandler:
 
+    Dim errNo As Long
+    Dim errMsg As String
+
+    errNo = Err.Number
+    errMsg = Err.Description
+
     On Error Resume Next
+
     Close #f
 
-    MsgBox _
-        "エラーが発生しました。" & vbCrLf & _
-        "Err=" & CStr(Err.Number) & vbCrLf & _
-        Err.Description, _
-        vbCritical
+    ConsoleEcho _
+        "ERROR: " & _
+        CStr(errNo) & _
+        " " & _
+        errMsg
+
+    ExitProcess 9
 
 End Sub
 
+
+'==================================================
+' QuickSort
+'==================================================
 
 Private Sub QuickSort( _
     ByRef lines() As String, _
@@ -141,6 +267,7 @@ Private Sub QuickSort( _
     Dim j As Long
 
     Dim pivot As String
+
     Dim tmpLine As String
     Dim tmpKey As String
 
@@ -151,15 +278,33 @@ Private Sub QuickSort( _
 
     Do While i <= j
 
-        ' 昇順
-        Do While StrComp(keys(i), pivot, vbBinaryCompare) < 0
+        '------------------------------------------
+        ' pivotより小さい間、右へ
+        '------------------------------------------
+        Do While StrComp( _
+            keys(i), _
+            pivot, _
+            vbBinaryCompare) < 0
+
             i = i + 1
+
         Loop
 
-        Do While StrComp(keys(j), pivot, vbBinaryCompare) > 0
+        '------------------------------------------
+        ' pivotより大きい間、左へ
+        '------------------------------------------
+        Do While StrComp( _
+            keys(j), _
+            pivot, _
+            vbBinaryCompare) > 0
+
             j = j - 1
+
         Loop
 
+        '------------------------------------------
+        ' 入れ替え
+        '------------------------------------------
         If i <= j Then
 
             tmpLine = lines(i)
@@ -177,12 +322,58 @@ Private Sub QuickSort( _
 
     Loop
 
+    '----------------------------------------------
+    ' 左側
+    '----------------------------------------------
     If first < j Then
-        QuickSort lines, keys, first, j
+
+        QuickSort _
+            lines, _
+            keys, _
+            first, _
+            j
+
     End If
 
+    '----------------------------------------------
+    ' 右側
+    '----------------------------------------------
     If i < last Then
-        QuickSort lines, keys, i, last
+
+        QuickSort _
+            lines, _
+            keys, _
+            i, _
+            last
+
+    End If
+
+End Sub
+
+
+'==================================================
+' コンソール出力
+'==================================================
+
+Private Sub ConsoleEcho(ByVal message As String)
+
+    Dim hStdOut As Long
+    Dim written As Long
+    Dim text As String
+
+    text = message & vbCrLf
+
+    hStdOut = GetStdHandle(STD_OUTPUT_HANDLE)
+
+    If hStdOut <> 0 Then
+
+        Call WriteConsoleW( _
+            hStdOut, _
+            StrPtr(text), _
+            Len(text), _
+            written, _
+            0)
+
     End If
 
 End Sub
