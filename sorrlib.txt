@@ -1,0 +1,188 @@
+Option Explicit
+
+Public Sub Main()
+
+    Dim filePath As String
+    Dim lines() As String
+    Dim keys() As String
+    Dim lineText As String
+    Dim cols() As String
+
+    Dim f As Integer
+    Dim count As Long
+    Dim capacity As Long
+
+    '-----------------------------------------
+    ' 引数取得
+    ' 例:
+    '   CsvSort.exe "C:\work\data.csv"
+    '-----------------------------------------
+    filePath = Trim$(Command$)
+
+    ' 前後のダブルクォートを除去
+    If Len(filePath) >= 2 Then
+        If Left$(filePath, 1) = """" And Right$(filePath, 1) = """" Then
+            filePath = Mid$(filePath, 2, Len(filePath) - 2)
+        End If
+    End If
+
+    If Len(filePath) = 0 Then
+        MsgBox "入力ファイルを指定してください。", vbExclamation
+        Exit Sub
+    End If
+
+    If Dir$(filePath) = "" Then
+        MsgBox "ファイルが存在しません。" & vbCrLf & filePath, vbExclamation
+        Exit Sub
+    End If
+
+    On Error GoTo ErrHandler
+
+    '-----------------------------------------
+    ' CSV読込
+    '-----------------------------------------
+    capacity = 1000
+    ReDim lines(0 To capacity - 1)
+    ReDim keys(0 To capacity - 1)
+
+    f = FreeFile
+    Open filePath For Input As #f
+
+    count = 0
+
+    Do Until EOF(f)
+
+        Line Input #f, lineText
+
+        ' 空行も一応そのまま扱う
+        cols = Split(lineText, ",")
+
+        ' 30項目あることを確認
+        If UBound(cols) <> 29 Then
+            Close #f
+            MsgBox _
+                "CSVの項目数が30項目ではありません。" & vbCrLf & _
+                "行番号：" & CStr(count + 1) & vbCrLf & _
+                "項目数：" & CStr(UBound(cols) + 1), _
+                vbCritical
+            Exit Sub
+        End If
+
+        If count >= capacity Then
+            capacity = capacity + 1000
+            ReDim Preserve lines(0 To capacity - 1)
+            ReDim Preserve keys(0 To capacity - 1)
+        End If
+
+        ' 元の行はそのまま保持
+        lines(count) = lineText
+
+        ' 3項目目をソートキーとして保持
+        ' 配列は0開始なので「2」
+        keys(count) = cols(2)
+
+        count = count + 1
+
+    Loop
+
+    Close #f
+
+    If count = 0 Then
+        Exit Sub
+    End If
+
+    ReDim Preserve lines(0 To count - 1)
+    ReDim Preserve keys(0 To count - 1)
+
+    '-----------------------------------------
+    ' 3項目目で昇順ソート
+    '-----------------------------------------
+    If count > 1 Then
+        QuickSort lines, keys, 0, count - 1
+    End If
+
+    '-----------------------------------------
+    ' 元ファイルへ上書き
+    '-----------------------------------------
+    f = FreeFile
+    Open filePath For Output As #f
+
+    Dim i As Long
+
+    For i = 0 To count - 1
+        Print #f, lines(i)
+    Next
+
+    Close #f
+
+    Exit Sub
+
+ErrHandler:
+
+    On Error Resume Next
+    Close #f
+
+    MsgBox _
+        "エラーが発生しました。" & vbCrLf & _
+        "Err=" & CStr(Err.Number) & vbCrLf & _
+        Err.Description, _
+        vbCritical
+
+End Sub
+
+
+Private Sub QuickSort( _
+    ByRef lines() As String, _
+    ByRef keys() As String, _
+    ByVal first As Long, _
+    ByVal last As Long)
+
+    Dim i As Long
+    Dim j As Long
+
+    Dim pivot As String
+    Dim tmpLine As String
+    Dim tmpKey As String
+
+    i = first
+    j = last
+
+    pivot = keys((first + last) \ 2)
+
+    Do While i <= j
+
+        ' 昇順
+        Do While StrComp(keys(i), pivot, vbBinaryCompare) < 0
+            i = i + 1
+        Loop
+
+        Do While StrComp(keys(j), pivot, vbBinaryCompare) > 0
+            j = j - 1
+        Loop
+
+        If i <= j Then
+
+            tmpLine = lines(i)
+            lines(i) = lines(j)
+            lines(j) = tmpLine
+
+            tmpKey = keys(i)
+            keys(i) = keys(j)
+            keys(j) = tmpKey
+
+            i = i + 1
+            j = j - 1
+
+        End If
+
+    Loop
+
+    If first < j Then
+        QuickSort lines, keys, first, j
+    End If
+
+    If i < last Then
+        QuickSort lines, keys, i, last
+    End If
+
+End Sub
